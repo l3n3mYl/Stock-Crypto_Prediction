@@ -1,5 +1,6 @@
 import time
 import random
+import calendar
 import numpy as np
 import pandas as pd
 import datetime as dt
@@ -19,6 +20,7 @@ RATIO_TO_PREDICT = "BTC-USD"
 EPOCHS = 13
 BATCH_SIZE = 64
 NAME = f"{SEQ_LEN}-SEQ-{FUTURE_PERIOD_PREDICT}-PRED-{int(time.time())}"
+RATIOS = ["BTC-USD", "LTC-USD", "BCH-USD", "ETH-USD"]
 
 def classify(current, future):
 	if float(future) > float(current):
@@ -71,94 +73,123 @@ def preprocess_df(df):
 
 	return np.array(x), y
 
-main_data = pd.DataFrame()
 
-ratios = ["BTC-USD", "LTC-USD", "BCH-USD", "ETH-USD"]
+def get_initial_data():
+	main_data = pd.DataFrame()
 
-price_start_date = dt.datetime(2015, 1, 1)
-price_end_date = dt.datetime.now()
+	price_start_date = dt.datetime(2015, 1, 1)
+	price_end_date = dt.datetime.now()
 
-scaler = MinMaxScaler(feature_range=(0,1))
+	scaler = MinMaxScaler(feature_range=(0,1))
 
-for ratio in ratios:
-	data = web.DataReader(f'{ratio}', 'yahoo', price_start_date, price_end_date)
+	for ratio in RATIOS:
+		data = web.DataReader(f'{ratio}', 'yahoo', price_start_date, price_end_date)
 
-	data.rename(columns={'Close': f'{ratio}_close', 'Volume': f'{ratio}_volume'}, inplace=True)
+		data.rename(columns={'Close': f'{ratio}_close', 'Volume': f'{ratio}_volume'}, inplace=True)
 
-	data = data[[f"{ratio}_close", f"{ratio}_volume"]]
+		data = data[[f"{ratio}_close", f"{ratio}_volume"]]
 
-	if len(main_data)==0:
-		main_data = data
-	else:
-		main_data = main_data.join(data)
+		if len(main_data)==0:
+			main_data = data
+		else:
+			main_data = main_data.join(data)
 
-main_data.fillna(method='ffill', inplace=True)
-main_data.dropna(inplace=True)
+	main_data.fillna(method='ffill', inplace=True)
+	main_data.dropna(inplace=True)
 
-main_data['future'] = main_data[f'{RATIO_TO_PREDICT}_close'].shift(-FUTURE_PERIOD_PREDICT)
-main_data['target'] = list(map(classify, main_data[f'{RATIO_TO_PREDICT}_close'], main_data['future']))
+	main_data['future'] = main_data[f'{RATIO_TO_PREDICT}_close'].shift(-FUTURE_PERIOD_PREDICT)
+	main_data['target'] = list(map(classify, main_data[f'{RATIO_TO_PREDICT}_close'], main_data['future']))
 
-main_data.dropna(inplace=True)
+	main_data.dropna(inplace=True)
 
-times = sorted(main_data.index.values)
-last_5pct = sorted(main_data.index.values)[-int(0.05*len(times))]
+	return main_data
 
-validation_main_data = main_data[(main_data.index >= last_5pct)]
-main_data = main_data[(main_data.index < last_5pct)]
+# main_data = get_initial_data()
 
-train_x, train_y = preprocess_df(main_data)
-validation_x, validation_y = preprocess_df(validation_main_data)
+# times = sorted(main_data.index.values)
+# last_5pct = sorted(main_data.index.values)[-int(0.05*len(times))]
 
-print(f"train data: {len(train_x)} validation: {len(validation_x)}")
-print(f"Don't buys: {train_y.count(0)}, buys: {train_y.count(1)}")
-print(f"VALIDATION Don't buys: {validation_y.count(0)}, buys: {validation_y.count(1)}")
+# validation_main_data = main_data[(main_data.index >= last_5pct)]
+# main_data = main_data[(main_data.index < last_5pct)]
 
-train_x	= np.asarray(train_x)
-train_y = np.asarray(train_y)
-validation_x = np.asarray(validation_x)
-validation_y = np.asarray(validation_y)
+# train_x, train_y = preprocess_df(main_data)
+# validation_x, validation_y = preprocess_df(validation_main_data)
 
-model = Sequential()
-model.add(LSTM(128, input_shape=(train_x.shape[1:]), return_sequences=True))
-model.add(Dropout(0.2))
-model.add(BatchNormalization())
+# print(f"train data: {len(train_x)} validation: {len(validation_x)}")
+# print(f"Don't buys: {train_y.count(0)}, buys: {train_y.count(1)}")
+# print(f"VALIDATION Don't buys: {validation_y.count(0)}, buys: {validation_y.count(1)}")
 
-model.add(LSTM(128, return_sequences=True))
-model.add(Dropout(0.2))
-model.add(BatchNormalization())
+# train_x	= np.asarray(train_x)
+# train_y = np.asarray(train_y)
+# validation_x = np.asarray(validation_x)
+# validation_y = np.asarray(validation_y)
 
-model.add(LSTM(128))
-model.add(Dropout(0.2))
-model.add(BatchNormalization())
+# model = Sequential()
+# model.add(LSTM(128, input_shape=(train_x.shape[1:]), return_sequences=True))
+# model.add(Dropout(0.2))
+# model.add(BatchNormalization())
 
-model.add(Dense(32, activation='relu'))
-model.add(Dropout(0.2))
+# model.add(LSTM(128, return_sequences=True))
+# model.add(Dropout(0.2))
+# model.add(BatchNormalization())
 
-model.add(Dense(2, activation='softmax'))
+# model.add(LSTM(128))
+# model.add(Dropout(0.2))
+# model.add(BatchNormalization())
 
-opt = tf.keras.optimizers.Adam(learning_rate=0.001, decay=1e-6)
+# model.add(Dense(32, activation='relu'))
+# model.add(Dropout(0.2))
 
-model.compile(
-	loss='sparse_categorical_crossentropy',
-	optimizer=opt,
-	metrics=['accuracy']
-)
+# model.add(Dense(2, activation='softmax'))
 
-tensorboard = TensorBoard(log_dir=f"logs/{NAME}")
+# opt = tf.keras.optimizers.Adam(learning_rate=0.001, decay=1e-6)
 
-filepath = "models/RNN_Final-{epoch:02d}-{val_accuracy:.3f}.hd5"
-checkpoint = ModelCheckpoint(filepath, monitor='val_accuracy', verbose=1, save_best_only=True, mode='max')
+# model.compile(
+# 	loss='sparse_categorical_crossentropy',
+# 	optimizer=opt,
+# 	metrics=['accuracy']
+# )
 
-history = model.fit(
-	train_x, train_y,
-	batch_size=BATCH_SIZE,
-	epochs=EPOCHS,
-	validation_data=(validation_x, validation_y),
-	callbacks=[tensorboard, checkpoint]
-)
+# tensorboard = TensorBoard(log_dir=f"logs/{NAME}")
 
-score = model.evaluate(validation_x, validation_y, verbose=0)
-print('Test loss: ', score[0])
-print('Test accuracy: ', score[1])
+# filepath = "models/RNN_Final-{epoch:02d}-{val_accuracy:.3f}.hd5"
+# checkpoint = ModelCheckpoint(filepath, monitor='val_accuracy', verbose=1, save_best_only=True, mode='max')
 
-model.save(f"models/{NAME}")
+# history = model.fit(
+# 	train_x, train_y,
+# 	batch_size=BATCH_SIZE,
+# 	epochs=EPOCHS,
+# 	validation_data=(validation_x, validation_y),
+# 	callbacks=[tensorboard, checkpoint]
+# )
+
+# score = model.evaluate(validation_x, validation_y, verbose=0)
+# print('Test loss: ', score[0])
+# print('Test accuracy: ', score[1])
+
+# model.save(f"models/{NAME}")
+
+def PredictTomorrow(future_day=1, test_data=[], prediction_days=SEQ_LEN):
+	test_start = dt.datetime(2020, 1, 1)
+
+	year = dt.datetime.now().year
+	month = dt.datetime.now().month
+	day = dt.datetime.now().day + future_day
+	last_month_day = calendar.monthrange(year, month)[1]
+
+	if day > last_month_day:
+		month = month +1
+		day = day - last_month_day
+		if month >= 13:
+			month = 1
+			year = year +1
+
+	test_end = dt.datetime(year, month, day)
+
+	if len(test_data) == 0:
+		test_data = get_initial_data()
+		print(test_data)
+		print(test_data[f'{RATIO_TO_PREDICT}_close'].values)
+
+PredictTomorrow()
+
