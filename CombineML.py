@@ -25,8 +25,8 @@ RATIOS = ["BTC-USD", "LTC-USD", "BCH-USD", "ETH-USD"]
 
 scaler = MinMaxScaler(feature_range=(0,1))
 
-<<<<<<< HEAD
-=======
+# <<<<<<< HEAD
+# =======
 def create_dict(prediction_round):
 
 	new_dict = {}
@@ -40,7 +40,7 @@ def create_dict(prediction_round):
 		new_dict.update(new_row[i])
 
 	return new_dict
->>>>>>> 70eca1dcf90126539293e7f03ce4692b99c8a0ef
+# >>>>>>> 70eca1dcf90126539293e7f03ce4692b99c8a0ef
 
 def classify(current, future):
 	if float(future) > float(current):
@@ -113,29 +113,13 @@ def get_initial_data():
 			main_data = main_data.join(data)
 
 	main_data.fillna(method='ffill', inplace=True)
-	main_data.dropna(inplace=True)
-<<<<<<< HEAD
-
-	main_data['future'] = main_data[f'{RATIO_TO_PREDICT}_close'].shift(-FUTURE_PERIOD_PREDICT)
-	main_data['target'] = list(map(classify, main_data[f'{RATIO_TO_PREDICT}_close'], main_data['future']))
-
-	main_data.dropna(inplace=True)
-
-	return main_data
-
-=======
-
-	main_data['future'] = main_data[f'{RATIO_TO_PREDICT}_close'].shift(-FUTURE_PERIOD_PREDICT)
-	main_data['target'] = list(map(classify, main_data[f'{RATIO_TO_PREDICT}_close'], main_data['future']))
-
-	# main_data.dropna(inplace=True)#Drops last 3 inputs (SEPARATE main_data dataset!!!)
+	# main_data.dropna(inplace=True)
 
 	main_data['future'] = main_data[f'{RATIO_TO_PREDICT}_close'].shift(-FUTURE_PERIOD_PREDICT)
 	main_data['target'] = list(map(classify, main_data[f'{RATIO_TO_PREDICT}_close'], main_data['future']))
 
 	return main_data
 
->>>>>>> 70eca1dcf90126539293e7f03ce4692b99c8a0ef
 main_data = get_initial_data()
 
 times = sorted(main_data.index.values)
@@ -198,11 +182,6 @@ history = model.fit(
 score = model.evaluate(validation_x, validation_y, verbose=0)
 print('Test loss: ', score[0])
 print('Test accuracy: ', score[1])
-<<<<<<< HEAD
-model.save(f"models/{NAME}")
-=======
-# model.save(f"models/{NAME}", save_traces=False)
->>>>>>> 70eca1dcf90126539293e7f03ce4692b99c8a0ef
 
 def PredictTomorrow(future_day=1, test_data=[], prediction_days=SEQ_LEN):
 	test_start = dt.datetime(2020, 1, 1)
@@ -222,7 +201,6 @@ def PredictTomorrow(future_day=1, test_data=[], prediction_days=SEQ_LEN):
 	test_end = dt.datetime(year, month, day)
 
 	if len(test_data) == 0:
-<<<<<<< HEAD
 		test_data = get_initial_data()
 		
 	actual_price = test_data[f'{RATIO_TO_PREDICT}_close'].values
@@ -231,87 +209,29 @@ def PredictTomorrow(future_day=1, test_data=[], prediction_days=SEQ_LEN):
 		(main_data[f'{RATIO_TO_PREDICT}_close'], test_data[f'{RATIO_TO_PREDICT}_close']),
 		axis=0)
 
-=======
-		print('GET INIT DATA')
-		test_data = get_initial_data()
-
-	actual_price = test_data[f'{RATIO_TO_PREDICT}_close'].values
-	# print(main_data, 'main data')
-	total_dataset = pd.concat(
-		(main_data[f'{RATIO_TO_PREDICT}_close'], test_data[f'{RATIO_TO_PREDICT}_close']),
-		axis=0)
->>>>>>> 70eca1dcf90126539293e7f03ce4692b99c8a0ef
 	model_inputs = total_dataset[len(total_dataset) - len(test_data) - prediction_days:].values
 	model_inputs = model_inputs.reshape(-1, 1)
 	model_inputs = scaler.fit_transform(model_inputs)
 
-<<<<<<< HEAD
-	prediction_days = 481#!!!Fix static days
-
-	real_data = [model_inputs[len(model_inputs)+future_day-
-		prediction_days:len(model_inputs)+future_day, 0]]
-
-	real_data = np.array(real_data)
-
-	# real_data = np.reshape(real_data, (real_data.shape[0], real_data.shape[1], 8))
-	real_data = np.reshape(real_data, (1, 60, 8))#!!!Fix static shape
-
-	prediction = model.predict(real_data)
-	prediction = scaler.inverse_transform(prediction)
-
-	return prediction, actual_price, model_inputs
-
-prediction, ap, mi = PredictTomorrow()
-=======
-
-	# prediction_days = 481#!!!Fix static days
-
-	# real_data = [model_inputs[len(model_inputs)+future_day-
-	# 	prediction_days:len(model_inputs)+future_day, 0]]
-	print('CHECKPOINT0')
-	print(future_day, 'FUTURE_DAY')
-	print(dt.datetime(year, month, day), 'INSERTION DAY')
 	real_data = [model_inputs[len(model_inputs)-
 		480:len(model_inputs)+future_day, 0]]
 
 	real_data = np.array(real_data)
-	# print(real_data.shape, 'real_data shape')
-	# print(real_data)
-	# real_data = np.reshape(real_data, (real_data.shape[0], real_data.shape[1], 8))
-	print('CHECKPOINT1')
-	print(future_day, 'FUTURE_DAY')
-	print(dt.datetime(year, month, day), 'INSERTION DAY')
-	#!!!
 	real_data = np.reshape(real_data, (-1, SEQ_LEN, 8))#!!!Fix static shape
 	prediction = model.predict(real_data)
 	prediction = scaler.inverse_transform(prediction)
 
 	prediction_round = float("{:.2f}".format(prediction[0][0]))
-	print('CHECKPOINT2')
-	print(future_day, 'FUTURE_DAY')
-	print(dt.datetime(year, month, day), 'INSERTION DAY')
 	new_row = create_dict(prediction_round)
-	print('CHECKPOINT3')
-	print(future_day, 'FUTURE_DAY')
-	print(dt.datetime(year, month, day), 'INSERTION DAY')
 	test_data.loc[dt.datetime(year, month, day)] = new_row
-	#!!!!
-	# print(test_data.shape, 'test_data shape')
-	# print(real_data.shape, 'real_data shape')
-	# test_data.iloc[1:]
-	print(f'prediction done {future_day}: {prediction_round}')
+
 	return test_data
 
-# td = PredictTomorrow()
-# print(main_data.shape)
-# print(main_data.shape, 'main data')
 td = main_data
 for i in range(1, 15):
 	print(td, f'td loop{i}')
 	td = PredictTomorrow(future_day=i, test_data=td)
 
-# print(td, 'td')
 td['future'] = main_data[f'{RATIO_TO_PREDICT}_close'].shift(-FUTURE_PERIOD_PREDICT)
 td['target'] = list(map(classify, main_data[f'{RATIO_TO_PREDICT}_close'], main_data['future']))
 print(td.tail(20), 'td')
->>>>>>> 70eca1dcf90126539293e7f03ce4692b99c8a0ef
