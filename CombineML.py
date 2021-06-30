@@ -115,8 +115,11 @@ def get_initial_data():
 	main_data['future'] = main_data[f'{RATIO_TO_PREDICT}_close'].shift(-FUTURE_PERIOD_PREDICT)
 	main_data['target'] = list(map(classify, main_data[f'{RATIO_TO_PREDICT}_close'], main_data['future']))
 
-	# main_data.dropna(inplace=True)#Drops last 3 inputs
-	
+	# main_data.dropna(inplace=True)#Drops last 3 inputs (SEPARATE main_data dataset!!!)
+
+	main_data['future'] = main_data[f'{RATIO_TO_PREDICT}_close'].shift(-FUTURE_PERIOD_PREDICT)
+	main_data['target'] = list(map(classify, main_data[f'{RATIO_TO_PREDICT}_close'], main_data['future']))
+
 	return main_data
 
 main_data = get_initial_data()
@@ -209,12 +212,10 @@ def PredictTomorrow(future_day=1, test_data=[], prediction_days=SEQ_LEN):
 	total_dataset = pd.concat(
 		(main_data[f'{RATIO_TO_PREDICT}_close'], test_data[f'{RATIO_TO_PREDICT}_close']),
 		axis=0)
-	print('CHECKPOINT-1')
-	print(future_day, 'FUTURE_DAY')
-	print(dt.datetime(year, month, day), 'INSERTION DAY')
 	model_inputs = total_dataset[len(total_dataset) - len(test_data) - prediction_days:].values
 	model_inputs = model_inputs.reshape(-1, 1)
 	model_inputs = scaler.fit_transform(model_inputs)
+
 
 	# prediction_days = 481#!!!Fix static days
 
