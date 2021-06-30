@@ -25,6 +25,19 @@ RATIOS = ["BTC-USD", "LTC-USD", "BCH-USD", "ETH-USD"]
 
 scaler = MinMaxScaler(feature_range=(0,1))
 
+def insert_data(prediction_round):
+
+	new_dict = {}
+
+	new_row = [
+		{f'{ratio}_volume':'0', f'{ratio}_close':f'{prediction_round}'} if ratio == RATIO_TO_PREDICT 
+		else {f'{ratio}_volume':'0', f'{ratio}_close':'0'} 
+	for ratio in RATIOS]
+
+	for i in range(0, len(new_row)):
+		new_dict.update(new_row[i])
+
+	return new_dict
 
 def classify(current, future):
 	if float(future) > float(current):
@@ -213,6 +226,29 @@ def PredictTomorrow(future_day=1, test_data=[], prediction_days=SEQ_LEN):
 	prediction = model.predict(real_data)
 	prediction = scaler.inverse_transform(prediction)
 
+	prediction_round = float("{:.2f}".format(prediction[0][0]))
+
+	new_row = insert_data(prediction_round)
+
+	
+
+	# print(prediction_round, " Prediction")
+	# print(real_data, " Real Data")
+
 	return prediction, actual_price, model_inputs
 
 prediction, ap, mi = PredictTomorrow()
+
+
+
+
+# sm=[{f'{ratio}_volume':'0', f'{ratio}_close':'0'} for ratio in RATIOS]
+# # sm = {[f'{ratio}_volume' for ratio in RATIOS]: '0'}
+# for i in range(1, len(sm)):
+# 	sm[0].update(sm[i])
+# new_row = {
+# 	{f'{ratio}_volume':'0', f'{ratio}_close':'4'} if ratio == RATIO_TO_PREDICT else {f'{ratio}_volume':'0', f'{ratio}_close':'0'} for ratio in RATIOS}
+# # print(sm[0])
+# print(new_row)
+
+# p = [{f'{ratio}_volume':'0', f'{ratio}_close':'0'} if ratio == RATIO_TO_PREDICT else {f'{ratio}_volume':'0', f'{ratio}_close':'0'} for ratio in RATIOS]
