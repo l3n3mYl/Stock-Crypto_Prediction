@@ -18,10 +18,11 @@ from sklearn.preprocessing import MinMaxScaler
 from keras.layers import Dense, Dropout, LSTM, BatchNormalization
 from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping
 
+DAYS_TO_PREDICT = 20
 SEQ_LEN = 60
 FUTURE_PERIOD_PREDICT = 3
 RATIO_TO_PREDICT = "BTC-USD"
-EPOCHS = 2
+EPOCHS = 20
 BATCH_SIZE = 64
 NAME = f"{SEQ_LEN}-SEQ-{FUTURE_PERIOD_PREDICT}-PRED-{RATIO_TO_PREDICT}-{int(time.time())}"
 # RATIOS = ["BTC-USD", "LTC-USD", "BCH-USD", "ETH-USD"]
@@ -210,11 +211,11 @@ history = model.fit(
 	validation_data=(validation_x, validation_y),
 	callbacks=[tensorboard, checkpoint]
 )
+
 model.load_weights(filepath)
 score = model.evaluate(validation_x, validation_y, verbose=0)
 print('Test loss: ', score[0])
 print('Test accuracy: ', score[1])
-# model.save("models/{}".format(NAME))
 
 def PredictTomorrow(future_day=1, test_data=[], prediction_days=SEQ_LEN):
 	test_start = dt.datetime(2020, 1, 1)
@@ -260,8 +261,6 @@ def PredictTomorrow(future_day=1, test_data=[], prediction_days=SEQ_LEN):
 	test_data.loc[dt.datetime(year, month, day)] = new_row
 
 	return test_data
-
-DAYS_TO_PREDICT = 20
 
 td = main_data
 for i in range(1, DAYS_TO_PREDICT):
