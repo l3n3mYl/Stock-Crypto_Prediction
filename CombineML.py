@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 import datetime as dt
 import tensorflow as tf
-# import pandas_datareader as web
 
 from pandas_datareader import data as pdr
 import yfinance as yfin
@@ -22,11 +21,13 @@ DAYS_TO_PREDICT = 20
 SEQ_LEN = 60
 FUTURE_PERIOD_PREDICT = 3
 RATIO_TO_PREDICT = "BTC-USD"
-EPOCHS = 20
+EPOCHS = 2
 BATCH_SIZE = 64
 NAME = f"{SEQ_LEN}-SEQ-{FUTURE_PERIOD_PREDICT}-PRED-{RATIO_TO_PREDICT}-{int(time.time())}"
-# RATIOS = ["BTC-USD", "LTC-USD", "BCH-USD", "ETH-USD"]
-RATIOS = ["BTC-USD", "LTC-USD"]
+RATIOS = ["BTC-USD", "LTC-USD", "BCH-USD", "ETH-USD"] #Len must be dividable by 2
+
+last_dim = len(RATIOS)*2
+
 
 scaler = MinMaxScaler(feature_range=(0,1))
 
@@ -118,7 +119,6 @@ def get_initial_data():
 			main_data = main_data.join(data)
 
 	main_data.fillna(method='ffill', inplace=True)
-	# main_data.dropna(inplace=True)
 
 	main_data['future'] = main_data[f'{RATIO_TO_PREDICT}_close'].shift(-FUTURE_PERIOD_PREDICT)
 	main_data['target'] = list(map(classify, main_data[f'{RATIO_TO_PREDICT}_close'], main_data['future']))
@@ -152,8 +152,6 @@ model.add(LSTM(128, input_shape=(train_x.shape[1:]), return_sequences=True))
 model.add(Dropout(0.2))
 model.add(BatchNormalization())
 
-
-#**************
 model.add(LSTM(128, return_sequences=True))
 model.add(Dropout(0.2))
 model.add(BatchNormalization())
@@ -174,17 +172,6 @@ model.add(BatchNormalization())
 
 model.add(Dense(8, activation='relu'))
 model.add(Dropout(0.2))
-#**************
-# model.add(LSTM(128, return_sequences=True))
-# model.add(Dropout(0.2))
-# model.add(BatchNormalization())
-
-# model.add(LSTM(128))
-# model.add(Dropout(0.2))
-# model.add(BatchNormalization())
-
-# model.add(Dense(32, activation='relu'))
-# model.add(Dropout(0.2))
 
 model.add(Dense(2, activation='softmax'))
 
@@ -198,9 +185,6 @@ model.compile(
 
 tensorboard = TensorBoard(log_dir=f"logs/{NAME}")
 
-# early_stopping = EarlyStopping(monitor='val_loss', mode='auto', patience=5)
-
-# filepath = "models/RNN_Final-{epoch:02d}-{val_accuracy:.3f}.hd5"
 filepath = 'tmp/checkpoint'
 checkpoint = ModelCheckpoint(filepath, monitor='val_accuracy', verbose=1, save_best_only=True, mode='max')
 
@@ -251,8 +235,9 @@ def PredictTomorrow(future_day=1, test_data=[], prediction_days=SEQ_LEN):
 		480:len(model_inputs)+future_day, 0]]
 
 	real_data = np.array(real_data)
-	# real_data = np.reshape(real_data, (-1, SEQ_LEN, 8))#!!!Fix static shape
-	real_data = np.reshape(real_data, (-1, SEQ_LEN, 4))
+	# real_data = np.reshape(real_data, (-1, SEQ_LEN, len(RATIOS)*2))
+	real_data = np.reshape(real_data, (-1, SEQ_LEN, last_dim))
+
 	prediction = model.predict(real_data)
 	prediction = scaler.inverse_transform(prediction)
 
