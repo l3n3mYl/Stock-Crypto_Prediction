@@ -4,30 +4,35 @@ import calendar
 import numpy as np
 import pandas as pd
 import datetime as dt
-import tensorflow as tf
-
-from pandas_datareader import data as pdr
 import yfinance as yfin
-yfin.pdr_override()
+import tensorflow as tf
+import matplotlib.pyplot as plt
 
 from collections import deque
 from sklearn import preprocessing
 from keras.models import Sequential
+from pandas_datareader import data as pdr
 from sklearn.preprocessing import MinMaxScaler
 from keras.layers import Dense, Dropout, LSTM, BatchNormalization
 from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping
 
+yfin.pdr_override()
+
 DAYS_TO_PREDICT = 20
-SEQ_LEN = 60
+# SEQ_LEN = 60
+SEQ_LEN = 120
 FUTURE_PERIOD_PREDICT = 3
-RATIO_TO_PREDICT = "BTC-USD"
+RATIO_TO_PREDICT = "AAPL"
+# RATIO_TO_PREDICT = "BTC-USD"
 EPOCHS = 2
 BATCH_SIZE = 64
 NAME = f"{SEQ_LEN}-SEQ-{FUTURE_PERIOD_PREDICT}-PRED-{RATIO_TO_PREDICT}-{int(time.time())}"
-RATIOS = ["BTC-USD", "LTC-USD", "BCH-USD", "ETH-USD"] #Len must be dividable by 2
+RATIOS = ["AAPL", "MSFT"] #Len must be dividable by 2
+# RATIOS = ["BTC-USD", "BCH-USD"]
 
 last_dim = len(RATIOS)*2
 
+# use_tfkeras = True # Prevents I/O error
 
 scaler = MinMaxScaler(feature_range=(0,1))
 
@@ -197,6 +202,7 @@ history = model.fit(
 )
 
 model.load_weights(filepath)
+
 score = model.evaluate(validation_x, validation_y, verbose=0)
 print('Test loss: ', score[0])
 print('Test accuracy: ', score[1])
@@ -253,3 +259,15 @@ for i in range(1, DAYS_TO_PREDICT):
 td['future'] = main_data[f'{RATIO_TO_PREDICT}_close'].shift(-FUTURE_PERIOD_PREDICT)
 td['target'] = list(map(classify, main_data[f'{RATIO_TO_PREDICT}_close'], main_data['future']))
 print(td.tail(DAYS_TO_PREDICT))
+
+
+predicted_data = td[f'{RATIO_TO_PREDICT}_close'][len(td)-DAYS_TO_PREDICT:-1]
+real_data = td[f'{RATIO_TO_PREDICT}_close'][len(td)-365:len(td)-DAYS_TO_PREDICT+1]
+
+plt.plot(predicted_data, color='pink', label='Predictions')
+plt.plot(real_data, color='blue', label='Real Data')
+plt.title(f'{RATIO_TO_PREDICT} price prediction')
+plt.xlabel('Time')
+plt.ylabel('Price')
+plt.legend(loc='upper left')
+plt.show()
