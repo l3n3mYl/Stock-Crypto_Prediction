@@ -235,7 +235,6 @@ def PredictTomorrow(future_day=1, test_data=[], prediction_days=SEQ_LEN):
 		480:len(model_inputs)+future_day, 0]]
 
 	real_data = np.array(real_data)
-	# real_data = np.reshape(real_data, (-1, SEQ_LEN, len(RATIOS)*2))
 	real_data = np.reshape(real_data, (-1, SEQ_LEN, last_dim))
 
 	prediction = model.predict(real_data)
