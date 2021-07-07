@@ -5,28 +5,32 @@ import numpy as np
 import pandas as pd
 import datetime as dt
 import tensorflow as tf
-import pandas_datareader as web
+
+from pandas_datareader import data as pdr
+import yfinance as yfin
+yfin.pdr_override()
 
 from collections import deque
 from sklearn import preprocessing
 from keras.models import Sequential
 from sklearn.preprocessing import MinMaxScaler
 from keras.layers import Dense, Dropout, LSTM, BatchNormalization
-from keras.callbacks import TensorBoard, ModelCheckpoint
+from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping
 
+DAYS_TO_PREDICT = 20
 SEQ_LEN = 60
 FUTURE_PERIOD_PREDICT = 3
 RATIO_TO_PREDICT = "BTC-USD"
-EPOCHS = 1
-BATCH_SIZE = 32
-NAME = f"{SEQ_LEN}-SEQ-{FUTURE_PERIOD_PREDICT}-PRED-{int(time.time())}"
-RATIOS = ["BTC-USD", "LTC-USD", "BCH-USD", "ETH-USD"]
+EPOCHS = 2
+BATCH_SIZE = 64
+NAME = f"{SEQ_LEN}-SEQ-{FUTURE_PERIOD_PREDICT}-PRED-{RATIO_TO_PREDICT}-{int(time.time())}"
+RATIOS = ["BTC-USD", "LTC-USD", "BCH-USD", "ETH-USD"] #Len must be dividable by 2
+
+last_dim = len(RATIOS)*2
 
 
 scaler = MinMaxScaler(feature_range=(0,1))
 
-# <<<<<<< HEAD
-# =======
 def create_dict(prediction_round):
 
 	new_dict = {}
@@ -35,12 +39,13 @@ def create_dict(prediction_round):
 		{f'{ratio}_volume':'0', f'{ratio}_close':f'{prediction_round}'} if ratio == RATIO_TO_PREDICT 
 		else {f'{ratio}_volume':'0', f'{ratio}_close':'0'} 
 	for ratio in RATIOS]
+
 	new_row.append({'future':'0', 'target':'0'})
+
 	for i in range(0, len(new_row)):
 		new_dict.update(new_row[i])
 
 	return new_dict
-# >>>>>>> 70eca1dcf90126539293e7f03ce4692b99c8a0ef
 
 def classify(current, future):
 	if float(future) > float(current):
@@ -97,11 +102,12 @@ def preprocess_df(df):
 def get_initial_data():
 	main_data = pd.DataFrame()
 
-	price_start_date = dt.datetime(2015, 1, 1)
+	price_start_date = dt.datetime(2014, 9, 14)
 	price_end_date = dt.datetime.now()
 
 	for ratio in RATIOS:
-		data = web.DataReader(f'{ratio}', 'yahoo', price_start_date, price_end_date)
+		# data = web.DataReader(f'{ratio}', 'yahoo', price_start_date, price_end_date)
+		data = pdr.get_data_yahoo(f'{ratio}', start=price_start_date, end=price_end_date)
 
 		data.rename(columns={'Close': f'{ratio}_close', 'Volume': f'{ratio}_volume'}, inplace=True)
 
@@ -113,27 +119,28 @@ def get_initial_data():
 			main_data = main_data.join(data)
 
 	main_data.fillna(method='ffill', inplace=True)
-	# main_data.dropna(inplace=True)
 
 	main_data['future'] = main_data[f'{RATIO_TO_PREDICT}_close'].shift(-FUTURE_PERIOD_PREDICT)
 	main_data['target'] = list(map(classify, main_data[f'{RATIO_TO_PREDICT}_close'], main_data['future']))
-
+	
 	return main_data
 
 main_data = get_initial_data()
 
 times = sorted(main_data.index.values)
-last_5pct = sorted(main_data.index.values)[-int(0.05*len(times))]
+last_10pct = sorted(main_data.index.values)[-int(0.1*len(times))]
 
-main_validation_data = main_data[(main_data.index >= last_5pct)]
-main_test_data = main_data[(main_data.index < last_5pct)]
+main_validation_data = main_data[(main_data.index >= last_10pct)]
+main_test_data = main_data[(main_data.index < last_10pct)]
 
 train_x, train_y = preprocess_df(main_test_data)
 validation_x, validation_y = preprocess_df(main_validation_data)
 
+print('===========================================================')
 print(f"train data: {len(train_x)} validation: {len(validation_x)}")
 print(f"Don't buys: {train_y.count(0)}, buys: {train_y.count(1)}")
 print(f"VALIDATION Don't buys: {validation_y.count(0)}, buys: {validation_y.count(1)}")
+print('===========================================================')
 
 train_x	= np.asarray(train_x)
 train_y = np.asarray(train_y)
@@ -149,11 +156,21 @@ model.add(LSTM(128, return_sequences=True))
 model.add(Dropout(0.2))
 model.add(BatchNormalization())
 
-model.add(LSTM(128))
+model.add(Dense(64, activation='relu'))
+model.add(Dropout(0.2))
+
+model.add(LSTM(64, return_sequences=True))
 model.add(Dropout(0.2))
 model.add(BatchNormalization())
 
 model.add(Dense(32, activation='relu'))
+model.add(Dropout(0.2))
+
+model.add(LSTM(32))
+model.add(Dropout(0.2))
+model.add(BatchNormalization())
+
+model.add(Dense(8, activation='relu'))
 model.add(Dropout(0.2))
 
 model.add(Dense(2, activation='softmax'))
@@ -168,7 +185,7 @@ model.compile(
 
 tensorboard = TensorBoard(log_dir=f"logs/{NAME}")
 
-filepath = "models/RNN_Final-{epoch:02d}-{val_accuracy:.3f}.hd5"
+filepath = 'tmp/checkpoint'
 checkpoint = ModelCheckpoint(filepath, monitor='val_accuracy', verbose=1, save_best_only=True, mode='max')
 
 history = model.fit(
@@ -176,9 +193,10 @@ history = model.fit(
 	batch_size=BATCH_SIZE,
 	epochs=EPOCHS,
 	validation_data=(validation_x, validation_y),
-	# callbacks=[tensorboard, checkpoint]
+	callbacks=[tensorboard, checkpoint]
 )
 
+model.load_weights(filepath)
 score = model.evaluate(validation_x, validation_y, verbose=0)
 print('Test loss: ', score[0])
 print('Test accuracy: ', score[1])
@@ -217,7 +235,8 @@ def PredictTomorrow(future_day=1, test_data=[], prediction_days=SEQ_LEN):
 		480:len(model_inputs)+future_day, 0]]
 
 	real_data = np.array(real_data)
-	real_data = np.reshape(real_data, (-1, SEQ_LEN, 8))#!!!Fix static shape
+	real_data = np.reshape(real_data, (-1, SEQ_LEN, last_dim))
+
 	prediction = model.predict(real_data)
 	prediction = scaler.inverse_transform(prediction)
 
@@ -228,10 +247,9 @@ def PredictTomorrow(future_day=1, test_data=[], prediction_days=SEQ_LEN):
 	return test_data
 
 td = main_data
-for i in range(1, 15):
-	print(td, f'td loop{i}')
+for i in range(1, DAYS_TO_PREDICT):
 	td = PredictTomorrow(future_day=i, test_data=td)
 
 td['future'] = main_data[f'{RATIO_TO_PREDICT}_close'].shift(-FUTURE_PERIOD_PREDICT)
 td['target'] = list(map(classify, main_data[f'{RATIO_TO_PREDICT}_close'], main_data['future']))
-print(td.tail(20), 'td')
+print(td.tail(DAYS_TO_PREDICT))
