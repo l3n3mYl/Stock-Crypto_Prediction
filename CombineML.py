@@ -26,7 +26,7 @@ SEQ_LEN = 120
 FUTURE_PERIOD_PREDICT = 3
 # RATIO_TO_PREDICT = "AAPL"
 RATIO_TO_PREDICT = "BTC-USD"
-EPOCHS = 1
+EPOCHS = 13
 BATCH_SIZE = 64
 NAME = f"{SEQ_LEN}-SEQ-{FUTURE_PERIOD_PREDICT}-PRED-{RATIO_TO_PREDICT}-{int(time.time())}"
 # RATIOS = ["AAPL", "MSFT"] #Len must be dividable by 2
@@ -173,7 +173,14 @@ model.add(BatchNormalization())
 model.add(Dense(32, activation='relu'))
 model.add(Dropout(0.2))
 
-model.add(LSTM(32))
+model.add(LSTM(32, return_sequences=True))
+model.add(Dropout(0.2))
+model.add(BatchNormalization())
+
+model.add(Dense(16, activation='relu'))
+model.add(Dropout(0.2))
+
+model.add(LSTM(16))
 model.add(Dropout(0.2))
 model.add(BatchNormalization())
 
@@ -283,19 +290,15 @@ for x in range(prediction_days, len(model_inputs)):
 	x_test.append(model_inputs[x-prediction_days:x, 0])
 
 x_test = np.array(x_test)
-# print(x_test.shape)
-x_test = np.reshape(x_test, (x_test.shape[0], 30, last_dim))
 
+# x_test = np.reshape(x_test, (x_test.shape[0], 30, last_dim))
 
-# x_test = np.reshape(x_test, -1)
-# missing_value = math.floor(x_test.shape[0]/120/last_dim)
-# needed_value = missing_value*120*last_dim
-# final_difference = x_test.shape[0]-needed_value
-# x_test = x_test[final_difference-1:-1]
-# x_test = np.reshape(x_test, (-1, 120, last_dim))
-
-#208200
-#-360
+x_test = np.reshape(x_test, -1)
+missing_value = math.floor(x_test.shape[0]/120/last_dim)
+needed_value = missing_value*120*last_dim
+final_difference = x_test.shape[0]-needed_value
+x_test = x_test[final_difference-1:-1]
+x_test = np.reshape(x_test, (-1, 120, last_dim))
 
 predicted_prices = model.predict(x_test)
 predicted_prices = scaler.inverse_transform(predicted_prices)
