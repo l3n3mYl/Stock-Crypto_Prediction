@@ -2,7 +2,7 @@ import time
 import math
 import random
 import calendar
-import yfinance #Fixes Yahoo Finance
+import yfinance # Fixes Yahoo Finance
 import numpy as np
 import pandas as pd
 import datetime as dt
@@ -10,36 +10,34 @@ import yfinance as yfin
 import tensorflow as tf
 import matplotlib.pyplot as plt
 
-from collections import deque
+from collections import deque # Double-ended queue
 from sklearn import preprocessing
 from keras.models import Sequential
-from pandas_datareader import data as pdr
+from pandas_datareader import data as pdr # Data pulling
 from sklearn.preprocessing import MinMaxScaler
 from keras.layers import Dense, Dropout, LSTM, BatchNormalization
 from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping
 
-yfin.pdr_override()
+yfin.pdr_override() # Minimise code changes
 
-DAYS_TO_PREDICT = 20
-# SEQ_LEN = 60
-SEQ_LEN = 120
-FUTURE_PERIOD_PREDICT = 3
+DAYS_TO_PREDICT = 20 # How many days to predict
+SEQ_LEN = 120 # Prediction based on how many days
+FUTURE_PERIOD_PREDICT = 3 # Feature creation, shifting days downwards
 # RATIO_TO_PREDICT = "AAPL"
-RATIO_TO_PREDICT = "BTC-USD"
-EPOCHS = 13
+RATIO_TO_PREDICT = "BTC-USD" # Stock/Crypto prediction symbol
+EPOCHS = 1
 BATCH_SIZE = 64
-NAME = f"{SEQ_LEN}-SEQ-{FUTURE_PERIOD_PREDICT}-PRED-{RATIO_TO_PREDICT}-{int(time.time())}"
-# RATIOS = ["AAPL", "MSFT"] #Len must be dividable by 2
-RATIOS = ["BTC-USD", "BCH-USD"]
-
-last_dim = len(RATIOS)*2
-
-# use_tfkeras = True # Prevents I/O error
+NAME = f"{SEQ_LEN}-SEQ-{FUTURE_PERIOD_PREDICT}-PRED-{RATIO_TO_PREDICT}-{int(time.time())}" # Model name
+# RATIOS = ["AAPL", "MSFT"] # Len must be dividable by 2
+RATIOS = ["BTC-USD", "BCH-USD"] # Which Stock/Cryto to pull for model training
+LAST_DIM = len(RATIOS)*2 # Calculate last dimension for reshaping
 
 scaler = MinMaxScaler(feature_range=(0,1))
 
+### Function adds predictions at the end of the dict
+# * prediction_round - dict which holds all Crypto/Stock data
+# RETURN: dict with added predictions
 def create_dict(prediction_round):
-
 	new_dict = {}
 
 	new_row = [
@@ -54,35 +52,45 @@ def create_dict(prediction_round):
 
 	return new_dict
 
+### Compares current value to future value
+# * current - current value
+# * future - future value
+# RETURN: 1 if stock worth buying/0 if not
 def classify(current, future):
 	if float(future) > float(current):
 		return 1
 	else:
 		return 0
 
+### Calculates the Stock/Crypto change in percentage
+# * df - full data frame
+# RETURN: values in np array(x) and labels(y)
 def preprocess_df(df):
 	df = df.drop('future', 1)
 
+	# Normalise
 	for col in df.columns:
 		if col != 'target':
 			df[col] = df[col].pct_change()
-			df.dropna(inplace=True)
 			df[col] = preprocessing.scale(df[col].values)
 
-	df.dropna(inplace=True)
+	df.dropna(inplace=True) # Delete missing data
 
+	# Define deque to keep list the same len
 	sequential_data = []
 	prev_days = deque(maxlen=SEQ_LEN)
 
+	# Add prev day values for prediction
 	for i in df.values:
 		prev_days.append([n for n in i[:-1]])#all but target
 		if len(prev_days) == SEQ_LEN:
-			sequential_data.append([np.array(prev_days), i[-1]])
+			sequential_data.append([np.array(prev_days), i[-1]]) # everything but target
 
 	random.shuffle(sequential_data)
 
 	buys, sells = [], []
 
+	# Separate buys and sells
 	for seq, target in sequential_data:
 		if target == 0:
 			sells.append([seq, target])
@@ -105,7 +113,9 @@ def preprocess_df(df):
 
 	return np.array(x), y
 
-
+### Pulls real data from the API
+# * none
+# RETURN: data as dict
 def get_initial_data():
 	main_data = pd.DataFrame()
 
@@ -134,11 +144,11 @@ def get_initial_data():
 
 main_data = get_initial_data()
 
-times = sorted(main_data.index.values)
-last_10pct = sorted(main_data.index.values)[-int(0.1*len(times))]
+times = sorted(main_data.index.values) # Sort data by values
+last_10pct = sorted(main_data.index.values)[-int(0.1*len(times))] # Take last 10pct data for validation
 
-main_validation_data = main_data[(main_data.index >= last_10pct)]
-main_test_data = main_data[(main_data.index < last_10pct)]
+main_validation_data = main_data[(main_data.index >= last_10pct)] # Validation
+main_test_data = main_data[(main_data.index < last_10pct)] # Train
 
 train_x, train_y = preprocess_df(main_test_data)
 validation_x, validation_y = preprocess_df(main_validation_data)
@@ -149,16 +159,22 @@ print(f"Don't buys: {train_y.count(0)}, buys: {train_y.count(1)}")
 print(f"VALIDATION Don't buys: {validation_y.count(0)}, buys: {validation_y.count(1)}")
 print('===========================================================')
 
+# Convert train and validation data to np arrays
 train_x	= np.asarray(train_x)
 train_y = np.asarray(train_y)
 validation_x = np.asarray(validation_x)
 validation_y = np.asarray(validation_y)
 
+
+## Model creation
+
+# Input Layer
 model = Sequential()
 model.add(LSTM(128, input_shape=(train_x.shape[1:]), return_sequences=True))
 model.add(Dropout(0.2))
 model.add(BatchNormalization())
 
+# Hidden Layers
 model.add(LSTM(128, return_sequences=True))
 model.add(Dropout(0.2))
 model.add(BatchNormalization())
@@ -187,6 +203,7 @@ model.add(BatchNormalization())
 model.add(Dense(8, activation='relu'))
 model.add(Dropout(0.2))
 
+# Output Layer
 model.add(Dense(2, activation='softmax'))
 
 opt = tf.keras.optimizers.Adam(learning_rate=0.001, decay=1e-6)
@@ -197,8 +214,9 @@ model.compile(
 	metrics=['accuracy']
 )
 
-tensorboard = TensorBoard(log_dir=f"logs/{NAME}")
+tensorboard = TensorBoard(log_dir=f"logs/{NAME}") # Training and Validation visualisation
 
+# Def checkpoint and model file storing paths
 filepath = 'tmp/checkpoint'
 checkpoint = ModelCheckpoint(filepath, monitor='val_accuracy', verbose=1, save_best_only=True, mode='max')
 
@@ -210,15 +228,22 @@ history = model.fit(
 	callbacks=[tensorboard, checkpoint]
 )
 
+# Load best model from this session
 model.load_weights(filepath)
 
 score = model.evaluate(validation_x, validation_y, verbose=0)
 print('Test loss: ', score[0])
 print('Test accuracy: ', score[1])
 
+### Predict future days and add prediction to the final dict
+# * future_day - how many days to predict into the future
+# * test_data - list of Stock/Crypto values
+# * prediction_days - prediction based on how many days
+# RETURN: list of Stock/Crypto values, model inputs for plotting
 def PredictTomorrow(future_day=1, test_data=[], prediction_days=SEQ_LEN):
 	test_start = dt.datetime(2020, 1, 1)
 
+	# Calculate next day
 	year = dt.datetime.now().year
 	month = dt.datetime.now().month
 	day = dt.datetime.now().day + future_day
@@ -233,11 +258,13 @@ def PredictTomorrow(future_day=1, test_data=[], prediction_days=SEQ_LEN):
 
 	test_end = dt.datetime(year, month, day)
 
+	# If there is no data, pull new data from API
 	if len(test_data) == 0:
 		test_data = get_initial_data()
 		
 	actual_price = test_data[f'{RATIO_TO_PREDICT}_close'].values
 
+	# Concat real data list and prediction list
 	total_dataset = pd.concat(
 		(main_data[f'{RATIO_TO_PREDICT}_close'], test_data[f'{RATIO_TO_PREDICT}_close']),
 		axis=0)
@@ -250,7 +277,7 @@ def PredictTomorrow(future_day=1, test_data=[], prediction_days=SEQ_LEN):
 		480:len(model_inputs)+future_day, 0]]
 
 	real_data = np.array(real_data)
-	real_data = np.reshape(real_data, (-1, SEQ_LEN, last_dim))
+	real_data = np.reshape(real_data, (-1, SEQ_LEN, LAST_DIM))
 
 	prediction = model.predict(real_data)
 	prediction = scaler.inverse_transform(prediction)
@@ -263,17 +290,21 @@ def PredictTomorrow(future_day=1, test_data=[], prediction_days=SEQ_LEN):
 
 td = main_data
 model_inputs = None
+
+# Predict several days into future
 for i in range(1, DAYS_TO_PREDICT):
 	td, model_inputs = PredictTomorrow(future_day=i, test_data=td)
 
+# Add features to the new dataset
 td['future'] = main_data[f'{RATIO_TO_PREDICT}_close'].shift(-FUTURE_PERIOD_PREDICT)
 td['target'] = list(map(classify, main_data[f'{RATIO_TO_PREDICT}_close'], main_data['future']))
 print(td.tail(DAYS_TO_PREDICT))
 
-
+# Split data into real and predicted
 predicted_data = td[f'{RATIO_TO_PREDICT}_close'][len(td)-DAYS_TO_PREDICT:-1]
 real_data = td[f'{RATIO_TO_PREDICT}_close'][len(td)-365:len(td)-DAYS_TO_PREDICT+1]
 
+# Data plotting
 plt.plot(predicted_data, color='pink', label='Predictions')
 plt.plot(real_data, color='blue', label='Real Data')
 plt.title(f'{RATIO_TO_PREDICT} price prediction')
@@ -282,8 +313,9 @@ plt.ylabel('Price')
 plt.legend(loc='upper left')
 plt.show()
 
-x_test = []
 
+# Create additional list for holding
+x_test = []
 
 prediction_days = SEQ_LEN
 for x in range(prediction_days, len(model_inputs)):
@@ -291,19 +323,23 @@ for x in range(prediction_days, len(model_inputs)):
 
 x_test = np.array(x_test)
 
-# x_test = np.reshape(x_test, (x_test.shape[0], 30, last_dim))
+# Reshape for extended graph
+# x_test = np.reshape(x_test, (x_test.shape[0], 30, LAST_DIM))
 
+# Reshape for shorter graph
 x_test = np.reshape(x_test, -1)
-missing_value = math.floor(x_test.shape[0]/120/last_dim)
-needed_value = missing_value*120*last_dim
+missing_value = math.floor(x_test.shape[0]/120/LAST_DIM)
+needed_value = missing_value*120*LAST_DIM
 final_difference = x_test.shape[0]-needed_value
 x_test = x_test[final_difference-1:-1]
-x_test = np.reshape(x_test, (-1, 120, last_dim))
+x_test = np.reshape(x_test, (-1, 120, LAST_DIM))
 
+# Predict test data for fitted graph
 predicted_prices = model.predict(x_test)
 predicted_prices = scaler.inverse_transform(predicted_prices)
 actual_price = td[f"{RATIO_TO_PREDICT}_close"].values
 
+# Plot final graph
 plt.plot(actual_price, color='black', label="Actual Price")
 plt.plot(predicted_prices, color='pink', label="Predicted Prices")
 plt.title(f"{RATIO_TO_PREDICT} price prediction")
