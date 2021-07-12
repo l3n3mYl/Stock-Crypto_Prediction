@@ -1,6 +1,8 @@
 import time
+import math
 import random
 import calendar
+import yfinance #Fixes Yahoo Finance
 import numpy as np
 import pandas as pd
 import datetime as dt
@@ -22,13 +24,13 @@ DAYS_TO_PREDICT = 20
 # SEQ_LEN = 60
 SEQ_LEN = 120
 FUTURE_PERIOD_PREDICT = 3
-RATIO_TO_PREDICT = "AAPL"
-# RATIO_TO_PREDICT = "BTC-USD"
-EPOCHS = 2
+# RATIO_TO_PREDICT = "AAPL"
+RATIO_TO_PREDICT = "BTC-USD"
+EPOCHS = 1
 BATCH_SIZE = 64
 NAME = f"{SEQ_LEN}-SEQ-{FUTURE_PERIOD_PREDICT}-PRED-{RATIO_TO_PREDICT}-{int(time.time())}"
-RATIOS = ["AAPL", "MSFT"] #Len must be dividable by 2
-# RATIOS = ["BTC-USD", "BCH-USD"]
+# RATIOS = ["AAPL", "MSFT"] #Len must be dividable by 2
+RATIOS = ["BTC-USD", "BCH-USD"]
 
 last_dim = len(RATIOS)*2
 
@@ -250,11 +252,12 @@ def PredictTomorrow(future_day=1, test_data=[], prediction_days=SEQ_LEN):
 	new_row = create_dict(prediction_round)
 	test_data.loc[dt.datetime(year, month, day)] = new_row
 
-	return test_data
+	return test_data, model_inputs
 
 td = main_data
+model_inputs = None
 for i in range(1, DAYS_TO_PREDICT):
-	td = PredictTomorrow(future_day=i, test_data=td)
+	td, model_inputs = PredictTomorrow(future_day=i, test_data=td)
 
 td['future'] = main_data[f'{RATIO_TO_PREDICT}_close'].shift(-FUTURE_PERIOD_PREDICT)
 td['target'] = list(map(classify, main_data[f'{RATIO_TO_PREDICT}_close'], main_data['future']))
@@ -267,6 +270,40 @@ real_data = td[f'{RATIO_TO_PREDICT}_close'][len(td)-365:len(td)-DAYS_TO_PREDICT+
 plt.plot(predicted_data, color='pink', label='Predictions')
 plt.plot(real_data, color='blue', label='Real Data')
 plt.title(f'{RATIO_TO_PREDICT} price prediction')
+plt.xlabel('Time')
+plt.ylabel('Price')
+plt.legend(loc='upper left')
+plt.show()
+
+x_test = []
+
+
+prediction_days = SEQ_LEN
+for x in range(prediction_days, len(model_inputs)):
+	x_test.append(model_inputs[x-prediction_days:x, 0])
+
+x_test = np.array(x_test)
+# print(x_test.shape)
+x_test = np.reshape(x_test, (x_test.shape[0], 30, last_dim))
+
+
+# x_test = np.reshape(x_test, -1)
+# missing_value = math.floor(x_test.shape[0]/120/last_dim)
+# needed_value = missing_value*120*last_dim
+# final_difference = x_test.shape[0]-needed_value
+# x_test = x_test[final_difference-1:-1]
+# x_test = np.reshape(x_test, (-1, 120, last_dim))
+
+#208200
+#-360
+
+predicted_prices = model.predict(x_test)
+predicted_prices = scaler.inverse_transform(predicted_prices)
+actual_price = td[f"{RATIO_TO_PREDICT}_close"].values
+
+plt.plot(actual_price, color='black', label="Actual Price")
+plt.plot(predicted_prices, color='pink', label="Predicted Prices")
+plt.title(f"{RATIO_TO_PREDICT} price prediction")
 plt.xlabel('Time')
 plt.ylabel('Price')
 plt.legend(loc='upper left')
