@@ -26,25 +26,18 @@ FUTURE_PERIOD_PREDICT = 3 # Feature creation, shifting days downwards
 RATIO_TO_PREDICT = "BTC-USD" # Stock/Crypto prediction symbol
 EPOCHS = 1
 BATCH_SIZE = 64
-# NAME = f"{SEQ_LEN}-SEQ-{FUTURE_PERIOD_PREDICT}-PRED-{RATIO_TO_PREDICT}-{int(time.time())}" # Model name
 # RATIOS = ["AAPL", "MSFT"] # Len must be dividable by 2
 RATIOS = ["BTC-USD", "BCH-USD", "ETH-USD", "XRP-USD"] # Which Stock/Cryto to pull for model training
 # RATIOS = ["BTC-USD", "BCH-USD"]
 
-# SEQ_LEN = 120 # Prediction based on how many days
-# SEQ_LEN = 60
-# LAST_DIM = 8
-# print(len(RATIOS))
-# l = 10/0
-# print(l)
 if len(RATIOS) == 2:
 	LAST_DIM = len(RATIOS)*2 # Calculate last dimension for reshaping
-	SEQ_LEN = 120
+	PRED_OF_DAYS = 120
 elif len(RATIOS) == 4:
 	LAST_DIM = len(RATIOS)*2
-	SEQ_LEN = 60
+	PRED_OF_DAYS = 60
 
-NAME = f"{SEQ_LEN}-SEQ-{FUTURE_PERIOD_PREDICT}-PRED-{RATIO_TO_PREDICT}-{int(time.time())}" # Model name
+MODEL_NAME = f"{PRED_OF_DAYS}-SEQ-{FUTURE_PERIOD_PREDICT}-PRED-{RATIO_TO_PREDICT}-{int(time.time())}" # Model name
 
 
 scaler = MinMaxScaler(feature_range=(0,1))
@@ -84,22 +77,22 @@ def preprocess_df(df):
 	df = df.drop('future', 1)
 
 	# Normalise
-	for col in df.columns:
-		if col != 'target':
-			df[col] = df[col].pct_change()
-			df[col] = preprocessing.scale(df[col].values)
+	for c in df.columns:
+		if c != 'target':
+			df[c] = df[c].pct_change()
+			df[c] = preprocessing.scale(df[c].values)
 
 	df.dropna(inplace=True) # Delete missing data
 
 	# Define deque to keep list the same len
 	sequential_data = []
-	prev_days = deque(maxlen=SEQ_LEN)
+	prev_days = deque(maxlen=PRED_OF_DAYS)
 
 	# Add prev day values for prediction
-	for i in df.values:
-		prev_days.append([n for n in i[:-1]])#all but target
-		if len(prev_days) == SEQ_LEN:
-			sequential_data.append([np.array(prev_days), i[-1]]) # everything but target
+	for value in df.values:
+		prev_days.append([c for c in value[:-1]])#all but target
+		if len(prev_days) == PRED_OF_DAYS:
+			sequential_data.append([np.array(prev_days), value[-1]]) # everything but target
 
 	random.shuffle(sequential_data)
 
@@ -115,10 +108,14 @@ def preprocess_df(df):
 	random.shuffle(buys)
 	random.shuffle(sells)
 
-	lower = min(len(buys), len(sells))
+	# Find shorter list and equalise the other
+	shorter_len = min(len(buys), len(sells))
+
+	buys = buys[:shorter_len]
+	sells = sells[:shorter_len]
 
 	sequential_data = buys+sells
-	random.shuffle(sequential_data)
+	random.shuffle(sequential_data)# Shuffle to have random sequence of buys and sells
 
 	x, y = [], []
 
@@ -138,7 +135,7 @@ def get_initial_data():
 	price_end_date = dt.datetime.now()
 
 	for ratio in RATIOS:
-		# data = web.DataReader(f'{ratio}', 'yahoo', price_start_date, price_end_date)
+		# data = web.DataReader(f'{ratio}', 'yahoo', price_start_date, price_end_date) # Old method (Not Working)
 		data = pdr.get_data_yahoo(f'{ratio}', start=price_start_date, end=price_end_date)
 
 		data.rename(columns={'Close': f'{ratio}_close', 'Volume': f'{ratio}_volume'}, inplace=True)
@@ -159,7 +156,7 @@ def get_initial_data():
 
 main_data = get_initial_data()
 
-times = sorted(main_data.index.values) # Sort data by values
+times = sorted(main_data.index.values) # Sort data by date
 last_10pct = sorted(main_data.index.values)[-int(0.1*len(times))] # Take last 10pct data for validation
 
 main_validation_data = main_data[(main_data.index >= last_10pct)] # Validation
@@ -221,6 +218,7 @@ model.add(Dropout(0.2))
 # Output Layer
 model.add(Dense(2, activation='softmax'))
 
+# opt = tf.keras.optimizers.Adam(learning_rate=0.001, decay=1e-6)
 opt = tf.keras.optimizers.Adam(learning_rate=0.001, decay=1e-6)
 
 model.compile(
@@ -229,7 +227,7 @@ model.compile(
 	metrics=['accuracy']
 )
 
-tensorboard = TensorBoard(log_dir=f"logs/{NAME}") # Training and Validation visualisation
+tensorboard = TensorBoard(log_dir=f"logs/{MODEL_NAME}") # Training and Validation visualisation
 
 # Def checkpoint and model file storing paths
 filepath = 'tmp/checkpoint'
@@ -247,15 +245,17 @@ history = model.fit(
 model.load_weights(filepath)
 
 score = model.evaluate(validation_x, validation_y, verbose=0)
-print('Test loss: ', score[0])
-print('Test accuracy: ', score[1])
+print("================= TEST EVALUATION =================")
+print('Loss: ', score[0])
+print('Accuracy: ', score[1])
+print("================= TEST EVALUATION =================")
 
 ### Predict future days and add prediction to the final dict
 # * future_day - how many days to predict into the future
 # * test_data - list of Stock/Crypto values
 # * prediction_days - prediction based on how many days
 # RETURN: list of Stock/Crypto values, model inputs for plotting
-def PredictTomorrow(future_day=1, test_data=[], prediction_days=SEQ_LEN):
+def PredictTomorrow(future_day=1, test_data=[], prediction_days=PRED_OF_DAYS):
 	test_start = dt.datetime(2020, 1, 1)
 
 	# Calculate next day
@@ -292,8 +292,8 @@ def PredictTomorrow(future_day=1, test_data=[], prediction_days=SEQ_LEN):
 		480:len(model_inputs)+future_day, 0]]
 
 	real_data = np.array(real_data)
-	# real_data = np.reshape(real_data, (-1, SEQ_LEN, LAST_DIM))
-	real_data = np.reshape(real_data, (-1, SEQ_LEN, LAST_DIM))# 4 crypto - 8
+	# real_data = np.reshape(real_data, (-1, PRED_OF_DAYS, LAST_DIM))
+	real_data = np.reshape(real_data, (-1, PRED_OF_DAYS, LAST_DIM))# 4 crypto - 8
 
 
 	prediction = model.predict(real_data)
@@ -334,7 +334,7 @@ plt.show()
 # Create additional list for holding
 x_test = []
 
-prediction_days = SEQ_LEN
+prediction_days = PRED_OF_DAYS
 for x in range(prediction_days, len(model_inputs)):
 	x_test.append(model_inputs[x-prediction_days:x, 0])
 
@@ -343,14 +343,13 @@ x_test = np.array(x_test)
 # Reshape for extended graph
 # x_test = np.reshape(x_test, (x_test.shape[0], 30, LAST_DIM))
 
-# 4 crypto - 8
 x_test = np.reshape(x_test, -1)
-missing_value = math.floor(x_test.shape[0]/SEQ_LEN/LAST_DIM)
-needed_value = missing_value*SEQ_LEN*LAST_DIM
+missing_value = math.floor(x_test.shape[0]/PRED_OF_DAYS/LAST_DIM)
+needed_value = missing_value*PRED_OF_DAYS*LAST_DIM
 final_difference = x_test.shape[0]-needed_value
 x_test = x_test[final_difference-1:-1]
-x_test = np.reshape(x_test, (-1, SEQ_LEN, LAST_DIM))
-x_test = np.reshape(x_test, (x_test.shape[0], SEQ_LEN, LAST_DIM))
+x_test = np.reshape(x_test, (-1, PRED_OF_DAYS, LAST_DIM))
+x_test = np.reshape(x_test, (x_test.shape[0], PRED_OF_DAYS, LAST_DIM))
 
 # Reshape for shorter graph
 # x_test = np.reshape(x_test, -1)
