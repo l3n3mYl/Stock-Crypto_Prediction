@@ -21,16 +21,31 @@ from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping
 yfin.pdr_override() # Minimise code changes
 
 DAYS_TO_PREDICT = 20 # How many days to predict
-SEQ_LEN = 120 # Prediction based on how many days
 FUTURE_PERIOD_PREDICT = 3 # Feature creation, shifting days downwards
 # RATIO_TO_PREDICT = "AAPL"
 RATIO_TO_PREDICT = "BTC-USD" # Stock/Crypto prediction symbol
 EPOCHS = 1
 BATCH_SIZE = 64
-NAME = f"{SEQ_LEN}-SEQ-{FUTURE_PERIOD_PREDICT}-PRED-{RATIO_TO_PREDICT}-{int(time.time())}" # Model name
+# NAME = f"{SEQ_LEN}-SEQ-{FUTURE_PERIOD_PREDICT}-PRED-{RATIO_TO_PREDICT}-{int(time.time())}" # Model name
 # RATIOS = ["AAPL", "MSFT"] # Len must be dividable by 2
-RATIOS = ["BTC-USD", "BCH-USD"] # Which Stock/Cryto to pull for model training
-LAST_DIM = len(RATIOS)*2 # Calculate last dimension for reshaping
+RATIOS = ["BTC-USD", "BCH-USD", "ETH-USD", "XRP-USD"] # Which Stock/Cryto to pull for model training
+# RATIOS = ["BTC-USD", "BCH-USD"]
+
+# SEQ_LEN = 120 # Prediction based on how many days
+# SEQ_LEN = 60
+# LAST_DIM = 8
+# print(len(RATIOS))
+# l = 10/0
+# print(l)
+if len(RATIOS) == 2:
+	LAST_DIM = len(RATIOS)*2 # Calculate last dimension for reshaping
+	SEQ_LEN = 120
+elif len(RATIOS) == 4:
+	LAST_DIM = len(RATIOS)*2
+	SEQ_LEN = 60
+
+NAME = f"{SEQ_LEN}-SEQ-{FUTURE_PERIOD_PREDICT}-PRED-{RATIO_TO_PREDICT}-{int(time.time())}" # Model name
+
 
 scaler = MinMaxScaler(feature_range=(0,1))
 
@@ -119,7 +134,7 @@ def preprocess_df(df):
 def get_initial_data():
 	main_data = pd.DataFrame()
 
-	price_start_date = dt.datetime(2014, 9, 14)
+	price_start_date = dt.datetime(2017, 9, 14)
 	price_end_date = dt.datetime.now()
 
 	for ratio in RATIOS:
@@ -277,7 +292,9 @@ def PredictTomorrow(future_day=1, test_data=[], prediction_days=SEQ_LEN):
 		480:len(model_inputs)+future_day, 0]]
 
 	real_data = np.array(real_data)
-	real_data = np.reshape(real_data, (-1, SEQ_LEN, LAST_DIM))
+	# real_data = np.reshape(real_data, (-1, SEQ_LEN, LAST_DIM))
+	real_data = np.reshape(real_data, (-1, SEQ_LEN, LAST_DIM))# 4 crypto - 8
+
 
 	prediction = model.predict(real_data)
 	prediction = scaler.inverse_transform(prediction)
@@ -326,13 +343,22 @@ x_test = np.array(x_test)
 # Reshape for extended graph
 # x_test = np.reshape(x_test, (x_test.shape[0], 30, LAST_DIM))
 
-# Reshape for shorter graph
+# 4 crypto - 8
 x_test = np.reshape(x_test, -1)
-missing_value = math.floor(x_test.shape[0]/120/LAST_DIM)
-needed_value = missing_value*120*LAST_DIM
+missing_value = math.floor(x_test.shape[0]/SEQ_LEN/LAST_DIM)
+needed_value = missing_value*SEQ_LEN*LAST_DIM
 final_difference = x_test.shape[0]-needed_value
 x_test = x_test[final_difference-1:-1]
-x_test = np.reshape(x_test, (-1, 120, LAST_DIM))
+x_test = np.reshape(x_test, (-1, SEQ_LEN, LAST_DIM))
+x_test = np.reshape(x_test, (x_test.shape[0], SEQ_LEN, LAST_DIM))
+
+# Reshape for shorter graph
+# x_test = np.reshape(x_test, -1)
+# missing_value = math.floor(x_test.shape[0]/120/LAST_DIM)
+# needed_value = missing_value*120*LAST_DIM
+# final_difference = x_test.shape[0]-needed_value
+# x_test = x_test[final_difference-1:-1]
+# x_test = np.reshape(x_test, (-1, 120, LAST_DIM))
 
 # Predict test data for fitted graph
 predicted_prices = model.predict(x_test)
