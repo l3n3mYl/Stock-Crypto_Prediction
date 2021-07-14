@@ -16,7 +16,7 @@ from keras.models import Sequential
 from pandas_datareader import data as pdr # Data pulling
 from sklearn.preprocessing import MinMaxScaler
 from keras.layers import Dense, Dropout, LSTM, BatchNormalization
-from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping
+from keras.callbacks import TensorBoard, ModelCheckpoint, ReduceLROnPlateau
 
 yfin.pdr_override() # Minimise code changes
 
@@ -24,7 +24,7 @@ DAYS_TO_PREDICT = 20 # How many days to predict
 FUTURE_PERIOD_PREDICT = 3 # Feature creation, shifting days downwards
 # RATIO_TO_PREDICT = "AAPL"
 RATIO_TO_PREDICT = "BTC-USD" # Stock/Crypto prediction symbol
-EPOCHS = 1
+EPOCHS = 36
 BATCH_SIZE = 64
 # RATIOS = ["AAPL", "MSFT"] # Len must be dividable by 2
 RATIOS = ["BTC-USD", "BCH-USD", "ETH-USD", "XRP-USD"] # Which Stock/Cryto to pull for model training
@@ -40,7 +40,7 @@ elif len(RATIOS) == 4:
 MODEL_NAME = f"{PRED_OF_DAYS}-SEQ-{FUTURE_PERIOD_PREDICT}-PRED-{RATIO_TO_PREDICT}-{int(time.time())}" # Model name
 
 
-scaler = MinMaxScaler(feature_range=(0,1))
+scaler = MinMaxScaler(feature_range=(-1,1))
 
 ### Function adds predictions at the end of the dict
 # * prediction_round - dict which holds all Crypto/Stock data
@@ -179,44 +179,83 @@ validation_y = np.asarray(validation_y)
 
 
 ## Model creation
+# model = Sequential()
+# model.add(LSTM(128, input_shape=(train_x.shape[1:]), return_sequences=True))
+# model.add(Dropout(0.2))
+# model.add(BatchNormalization())
 
-# Input Layer
+# model.add(LSTM(128, return_sequences=True))
+# model.add(Dropout(0.1))
+# model.add(BatchNormalization())
+
+# model.add(LSTM(128))
+# model.add(Dropout(0.2))
+# model.add(BatchNormalization())
+
+# model.add(Dense(32, activation='relu'))
+# model.add(Dropout(0.2))
+
+# model.add(Dense(2, activation='softmax'))
+
+
 model = Sequential()
 model.add(LSTM(128, input_shape=(train_x.shape[1:]), return_sequences=True))
 model.add(Dropout(0.2))
 model.add(BatchNormalization())
 
-# Hidden Layers
 model.add(LSTM(128, return_sequences=True))
-model.add(Dropout(0.2))
+model.add(Dropout(0.1))
 model.add(BatchNormalization())
 
-model.add(Dense(64, activation='relu'))
-model.add(Dropout(0.2))
-
-model.add(LSTM(64, return_sequences=True))
-model.add(Dropout(0.2))
+model.add(LSTM(128))
+model.add(Dropout(0.1))
 model.add(BatchNormalization())
 
 model.add(Dense(32, activation='relu'))
 model.add(Dropout(0.2))
 
-model.add(LSTM(32, return_sequences=True))
-model.add(Dropout(0.2))
-model.add(BatchNormalization())
+model.add(Dense(2, activation='softmax'))
 
-model.add(Dense(16, activation='relu'))
-model.add(Dropout(0.2))
+# Input Layer
+# model = Sequential()
+# model.add(LSTM(128, input_shape=(train_x.shape[1:]), return_sequences=True))
+# model.add(Dropout(0.2))
+# model.add(BatchNormalization())
 
-model.add(LSTM(16))
-model.add(Dropout(0.2))
-model.add(BatchNormalization())
+# # Hidden Layers
+# model.add(LSTM(128, return_sequences=True))
+# model.add(Dropout(0.2))
+# model.add(BatchNormalization())
 
-model.add(Dense(8, activation='relu'))
-model.add(Dropout(0.2))
+# model.add(Dense(64, activation='relu'))
+# model.add(Dropout(0.2))
+
+# model.add(Dense(64, activation='relu'))
+# model.add(Dropout(0.2))
+
+# model.add(LSTM(64, return_sequences=True))
+# model.add(Dropout(0.2))
+# model.add(BatchNormalization())
+
+# model.add(Dense(32, activation='relu'))
+# model.add(Dropout(0.2))
+
+# model.add(LSTM(32, return_sequences=True))
+# model.add(Dropout(0.2))
+# model.add(BatchNormalization())
+
+# model.add(Dense(16, activation='relu'))
+# model.add(Dropout(0.2))
+
+# model.add(LSTM(16))
+# model.add(Dropout(0.2))
+# model.add(BatchNormalization())
+
+# model.add(Dense(8, activation='relu'))
+# model.add(Dropout(0.2))
 
 # Output Layer
-model.add(Dense(2, activation='softmax'))
+# model.add(Dense(2, activation='softmax'))
 
 # opt = tf.keras.optimizers.Adam(learning_rate=0.001, decay=1e-6)
 opt = tf.keras.optimizers.Adam(learning_rate=0.001, decay=1e-6)
@@ -228,6 +267,16 @@ model.compile(
 )
 
 tensorboard = TensorBoard(log_dir=f"logs/{MODEL_NAME}") # Training and Validation visualisation
+reduce_lr = ReduceLROnPlateau(
+	monitor='val_loss',
+	factor=0.2,
+	patience=2,
+	verbose=0,
+	mode='auto',
+	min_delta=0.0001,
+	cooldown=0,
+	min_lr=0.001,
+)
 
 # Def checkpoint and model file storing paths
 filepath = 'tmp/checkpoint'
@@ -238,7 +287,7 @@ history = model.fit(
 	batch_size=BATCH_SIZE,
 	epochs=EPOCHS,
 	validation_data=(validation_x, validation_y),
-	callbacks=[tensorboard, checkpoint]
+	callbacks=[tensorboard, checkpoint, reduce_lr]
 )
 
 # Load best model from this session
@@ -290,6 +339,8 @@ def PredictTomorrow(future_day=1, test_data=[], prediction_days=PRED_OF_DAYS):
 
 	real_data = [model_inputs[len(model_inputs)-
 		480:len(model_inputs)+future_day, 0]]
+	# real_data = [model_inputs[len(model_inputs)-future_day:
+	# 	len(model_inputs)+future_day, 0]]
 
 	real_data = np.array(real_data)
 	# real_data = np.reshape(real_data, (-1, PRED_OF_DAYS, LAST_DIM))
@@ -321,14 +372,14 @@ print(td.tail(DAYS_TO_PREDICT))
 predicted_data = td[f'{RATIO_TO_PREDICT}_close'][len(td)-DAYS_TO_PREDICT:-1]
 real_data = td[f'{RATIO_TO_PREDICT}_close'][len(td)-365:len(td)-DAYS_TO_PREDICT+1]
 
-# Data plotting
-plt.plot(predicted_data, color='pink', label='Predictions')
-plt.plot(real_data, color='blue', label='Real Data')
-plt.title(f'{RATIO_TO_PREDICT} price prediction')
-plt.xlabel('Time')
-plt.ylabel('Price')
-plt.legend(loc='upper left')
-plt.show()
+# # Data plotting
+# plt.plot(predicted_data, color='pink', label='Predictions')
+# plt.plot(real_data, color='blue', label='Real Data')
+# plt.title(f'{RATIO_TO_PREDICT} price prediction')
+# plt.xlabel('Time')
+# plt.ylabel('Price')
+# plt.legend(loc='upper left')
+# plt.show()
 
 
 # Create additional list for holding
@@ -364,7 +415,16 @@ predicted_prices = model.predict(x_test)
 predicted_prices = scaler.inverse_transform(predicted_prices)
 actual_price = td[f"{RATIO_TO_PREDICT}_close"].values
 
-# Plot final graph
+# Future prediction plotting
+plt.plot(predicted_data, color='pink', label='Predictions')
+plt.plot(real_data, color='blue', label='Real Data')
+plt.title(f'{RATIO_TO_PREDICT} price prediction')
+plt.xlabel('Time')
+plt.ylabel('Price')
+plt.legend(loc='upper left')
+plt.show()
+
+# Historical graph prediction
 plt.plot(actual_price, color='black', label="Actual Price")
 plt.plot(predicted_prices, color='pink', label="Predicted Prices")
 plt.title(f"{RATIO_TO_PREDICT} price prediction")
