@@ -179,25 +179,6 @@ validation_y = np.asarray(validation_y)
 
 
 ## Model creation
-# model = Sequential()
-# model.add(LSTM(128, input_shape=(train_x.shape[1:]), return_sequences=True))
-# model.add(Dropout(0.2))
-# model.add(BatchNormalization())
-
-# model.add(LSTM(128, return_sequences=True))
-# model.add(Dropout(0.1))
-# model.add(BatchNormalization())
-
-# model.add(LSTM(128))
-# model.add(Dropout(0.2))
-# model.add(BatchNormalization())
-
-# model.add(Dense(32, activation='relu'))
-# model.add(Dropout(0.2))
-
-# model.add(Dense(2, activation='softmax'))
-
-
 model = Sequential()
 model.add(LSTM(128, input_shape=(train_x.shape[1:]), return_sequences=True))
 model.add(Dropout(0.2))
@@ -216,48 +197,6 @@ model.add(Dropout(0.2))
 
 model.add(Dense(2, activation='softmax'))
 
-# Input Layer
-# model = Sequential()
-# model.add(LSTM(128, input_shape=(train_x.shape[1:]), return_sequences=True))
-# model.add(Dropout(0.2))
-# model.add(BatchNormalization())
-
-# # Hidden Layers
-# model.add(LSTM(128, return_sequences=True))
-# model.add(Dropout(0.2))
-# model.add(BatchNormalization())
-
-# model.add(Dense(64, activation='relu'))
-# model.add(Dropout(0.2))
-
-# model.add(Dense(64, activation='relu'))
-# model.add(Dropout(0.2))
-
-# model.add(LSTM(64, return_sequences=True))
-# model.add(Dropout(0.2))
-# model.add(BatchNormalization())
-
-# model.add(Dense(32, activation='relu'))
-# model.add(Dropout(0.2))
-
-# model.add(LSTM(32, return_sequences=True))
-# model.add(Dropout(0.2))
-# model.add(BatchNormalization())
-
-# model.add(Dense(16, activation='relu'))
-# model.add(Dropout(0.2))
-
-# model.add(LSTM(16))
-# model.add(Dropout(0.2))
-# model.add(BatchNormalization())
-
-# model.add(Dense(8, activation='relu'))
-# model.add(Dropout(0.2))
-
-# Output Layer
-# model.add(Dense(2, activation='softmax'))
-
-# opt = tf.keras.optimizers.Adam(learning_rate=0.001, decay=1e-6)
 opt = tf.keras.optimizers.Adam(learning_rate=0.001, decay=1e-6)
 
 model.compile(
@@ -339,8 +278,6 @@ def PredictTomorrow(future_day=1, test_data=[], prediction_days=PRED_OF_DAYS):
 
 	real_data = [model_inputs[len(model_inputs)-
 		480:len(model_inputs)+future_day, 0]]
-	# real_data = [model_inputs[len(model_inputs)-future_day:
-	# 	len(model_inputs)+future_day, 0]]
 
 	real_data = np.array(real_data)
 	# real_data = np.reshape(real_data, (-1, PRED_OF_DAYS, LAST_DIM))
@@ -372,16 +309,6 @@ print(td.tail(DAYS_TO_PREDICT))
 predicted_data = td[f'{RATIO_TO_PREDICT}_close'][len(td)-DAYS_TO_PREDICT:-1]
 real_data = td[f'{RATIO_TO_PREDICT}_close'][len(td)-365:len(td)-DAYS_TO_PREDICT+1]
 
-# # Data plotting
-# plt.plot(predicted_data, color='pink', label='Predictions')
-# plt.plot(real_data, color='blue', label='Real Data')
-# plt.title(f'{RATIO_TO_PREDICT} price prediction')
-# plt.xlabel('Time')
-# plt.ylabel('Price')
-# plt.legend(loc='upper left')
-# plt.show()
-
-
 # Create additional list for holding
 x_test = []
 
@@ -391,9 +318,6 @@ for x in range(prediction_days, len(model_inputs)):
 
 x_test = np.array(x_test)
 
-# Reshape for extended graph
-# x_test = np.reshape(x_test, (x_test.shape[0], 30, LAST_DIM))
-
 x_test = np.reshape(x_test, -1)
 missing_value = math.floor(x_test.shape[0]/PRED_OF_DAYS/LAST_DIM)
 needed_value = missing_value*PRED_OF_DAYS*LAST_DIM
@@ -401,14 +325,6 @@ final_difference = x_test.shape[0]-needed_value
 x_test = x_test[final_difference-1:-1]
 x_test = np.reshape(x_test, (-1, PRED_OF_DAYS, LAST_DIM))
 x_test = np.reshape(x_test, (x_test.shape[0], PRED_OF_DAYS, LAST_DIM))
-
-# Reshape for shorter graph
-# x_test = np.reshape(x_test, -1)
-# missing_value = math.floor(x_test.shape[0]/120/LAST_DIM)
-# needed_value = missing_value*120*LAST_DIM
-# final_difference = x_test.shape[0]-needed_value
-# x_test = x_test[final_difference-1:-1]
-# x_test = np.reshape(x_test, (-1, 120, LAST_DIM))
 
 # Predict test data for fitted graph
 predicted_prices = model.predict(x_test)
